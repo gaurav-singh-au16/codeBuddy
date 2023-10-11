@@ -25,8 +25,8 @@ module.exports.getUsersWithPostCount = async (req, res) => {
       },
       {
         $project: {
-          name: 1,
-          posts: 1,
+          name: true,
+          posts: true,
         },
       },
       {
