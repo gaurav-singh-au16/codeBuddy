@@ -6,39 +6,38 @@ module.exports.getUsersWithPostCount = async (req, res) => {
     //TODO: Implement this API
     const page = req.query.page ? Number(req.query.page) : 1;
     const limit = req.query.limit ? Number(req.query.limit) : 10;
-    const skip = (page - 1) * limit;
 
-    const users = await User.find({})
-      .skip(skip)
-      .limit(limit);
-
-    const userIds = users.map((user) => user._id);
-
-    const postCounts = await Post.aggregate([
+    const userPostPipeline = [
       {
-        $match: { userId: { $in: userIds } }
+        $lookup: {
+          from: 'posts',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'userPosts',
+        },
       },
       {
-        $group: {
-          _id: '$userId',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+        $addFields: {
+          posts: {
+            $size: '$userPosts',
+          },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          posts: 1,
+        },
+      },
+      {
+        $skip: (page - 1) * limit,
+      },
+      {
+        $limit: limit,
+      },
+    ];
 
-    
-    const postCountMap = new Map();
-    postCounts.forEach((result) => {
-      postCountMap.set(result._id.toString(), result.count);
-    });
-
-
-    const userDataWithCounts = users.map((user) => ({
-      _id: user._id,
-      name: user.name,
-      posts: postCountMap.get(user._id.toString()) || 0,
-    }));
-
+    const usersWithPostCount = await User.aggregate(userPostPipeline);
 
     const totalDocs = await User.countDocuments();
     const totalPages = Math.ceil(totalDocs / limit);
@@ -50,7 +49,7 @@ module.exports.getUsersWithPostCount = async (req, res) => {
 
     const result = {
       data: {
-        users: userDataWithCounts,
+        users: usersWithPostCount,
         pagination: {
           totalDocs,
           limit,
